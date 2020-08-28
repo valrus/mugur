@@ -88,7 +88,7 @@
     
     ("Commands"
      (insert) (home) (prior "pgup") (delete) (end) (next "pgdown")
-     (right) (left) (down) (up))
+     (right) (left) (down) (up) (bright- "brightness_down") (bright+ "brightness_up"))
 
     ("Media Keys"
      (vol-up "audio_vol_up") (vol-down "audio_vol_down")
