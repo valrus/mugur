@@ -88,7 +88,7 @@
     
     ("Commands"
      (insert) (home) (prior "pgup") (delete) (end) (next "pgdown")
-     (right) (left) (down) (up))
+     (right) (left) (down) (up) (bright- "brightness_down") (bright+ "brightness_up"))
 
     ("Media Keys"
      (vol-up "audio_vol_up") (vol-down "audio_vol_down")
@@ -866,7 +866,7 @@ This qmk function runs whenever there is a layer state change."
       (awhen (mugur--layer-leds layer)
         (cl-dotimes (i (length it))
           (when (= (nth i it) 1)
-            (insert (format "\t\t\tergodox_right_led_%s_on();\n" i)))))
+            (insert (format "\t\t\tergodox_right_led_%s_on();\n" (+ i 1))))))
       (insert "\t\t\tbreak;\n"))
     (insert "\t}\n")
     (insert "\treturn state;\n")
