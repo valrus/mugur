@@ -77,7 +77,7 @@
      (| "pipe") (: "colon") ("\"" "double_quote") (double_quote)
      (< "left_angle_bracket") (> "right_angle_bracket")
      (question) ("?" "question"))
-    
+
     ("Modifiers"
      (C "lctl") (M "lalt")
      (S "lsft") (G "lgui")
@@ -228,7 +228,10 @@ the same form.")
   "Generate simple keys or key sequences, like M-x or C-M-a.
 If SS is t, generate the key sequence as needed by SEND_STRING
 macros."
-  (cond ((awhen (mugur--keycode key :ss ss) it))
+  (cond ((awhen (mugur--keycode key :ss ss)
+           (if (mugur--modifier-key-p key)
+               (concat "KC_" it)
+             it)))
         ((s-contains? "-" (if (symbolp key)
                               (symbol-name key)
                             ""))
