@@ -572,6 +572,7 @@ that can be used to generate the qmk equivalent."
   combo-term
   rgblight-enable
   rgblight-animations
+  rgb-matrix-enable
   force-nkro
   layers
   combos
@@ -593,8 +594,9 @@ containing ones and zeroes."
 
 (cl-defun mugur--new-keymap (&key layers
                                   (tapping-term nil) (combo-term nil)
-                                  (force-nkro t)
                                   (rgblight-enable nil) (rgblight-animations nil)
+                                  (rgb-matrix-enable nil)
+                                  (force-nkro t)
                                   (combos nil) (macros nil) (tapdances nil)
                                   (fns nil))
   "Create a new keymap with NAME, KEYBOARD type and LAYERS."
@@ -603,6 +605,7 @@ containing ones and zeroes."
    :combo-term combo-term
    :rgblight-enable rgblight-enable
    :rgblight-animations rgblight-animations
+   :rgb-matrix-enable rgb-matrix-enable
    :force-nkro force-nkro
    :layers layers
    :combos combos
@@ -666,6 +669,7 @@ second or third argument."
                              (combo-term 100)
                              (rgblight-enable nil)
                              (rgblight-animations nil)
+                             (rgb-matrix-enable nil)
                              (force-nkro t)
                              (layers nil)
                              (combos nil)
@@ -679,6 +683,7 @@ second or third argument."
     :combo-term combo-term
     :rgblight-enable rgblight-enable
     :rgblight-animations rgblight-animations
+    :rgb-matrix-enable rgb-matrix-enable
     :force-nkro force-nkro
     :layers
     (let ((index 0))
@@ -1000,6 +1005,10 @@ The keymaps matrix contains all the layers and keys."
       (insert "FORCE_NKRO = yes\n"))
     (insert (format "RGBLIGHT_ENABLE = %s\n"
                     (if (mugur--keymap-rgblight-enable keymap)
+                        "yes"
+                      "no")))
+    (insert (format "RGB_MATRIX_ENABLE = %s\n"
+                    (if (mugur--keymap-rgb-matrix-enable keymap)
                         "yes"
                       "no")))))
 
