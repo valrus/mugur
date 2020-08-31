@@ -568,6 +568,9 @@ that can be used to generate the qmk equivalent."
   orientation)
 
 (cl-defstruct mugur--keymap
+  keyboard
+  name
+  layout
   tapping-term
   combo-term
   rgblight-enable
@@ -592,7 +595,8 @@ containing ones and zeroes."
    :leds leds
    :orientation orientation))
 
-(cl-defun mugur--new-keymap (&key layers
+(cl-defun mugur--new-keymap (keyboard name layout
+                                  &key layers
                                   (tapping-term nil) (combo-term nil)
                                   (rgblight-enable nil) (rgblight-animations nil)
                                   (rgb-matrix-enable nil)
@@ -601,6 +605,9 @@ containing ones and zeroes."
                                   (fns nil))
   "Create a new keymap with NAME, KEYBOARD type and LAYERS."
   (make-mugur--keymap
+   :keyboard keyboard
+   :name name
+   :layout layout
    :tapping-term tapping-term
    :combo-term combo-term
    :rgblight-enable rgblight-enable
@@ -665,20 +672,24 @@ second or third argument."
     keys))
 
 ;;;###autoload
-(cl-defun mugur-keymap (&key (tapping-term 180)
-                             (combo-term 100)
-                             (rgblight-enable nil)
-                             (rgblight-animations nil)
-                             (rgb-matrix-enable nil)
-                             (force-nkro t)
-                             (layers nil)
-                             (combos nil)
-                             (with-keys nil))
+(cl-defun mugur-keymap (keyboard name
+                                 &key
+                                 (layout 'mugur-ergodox-layout)
+                                 (tapping-term 180)
+                                 (combo-term 100)
+                                 (rgblight-enable nil)
+                                 (rgblight-animations nil)
+                                 (rgb-matrix-enable nil)
+                                 (force-nkro t)
+                                 (layers nil)
+                                 (combos nil)
+                                 (with-keys nil))
   "Define a qmk keymap named NAME for keyboard KEYBOARD."
   ;; Prepare for any mugur-key specifying emacs functions.
   (mugur--fns-reset)
   (mugur--keymap-set
    (mugur--new-keymap
+    keyboard name layout
     :tapping-term tapping-term
     :combo-term combo-term
     :rgblight-enable rgblight-enable
