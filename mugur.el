@@ -87,7 +87,8 @@
      (reset) (debug) (eeprom-reset "eeprom_reset"))
     
     ("Commands"
-     (insert) (home) (prior "pgup") (delete) (end) (next "pgdown")
+     (pscreen) (pause) (insert) (home)
+     (prior "pgup") (delete) (end) (next "pgdown")
      (right) (left) (down) (up) (bright- "brightness_down") (bright+ "brightness_up"))
 
     ("Media Keys"
@@ -524,7 +525,6 @@ does not eval them."
     (when (file-exists-p kbds)
       (load-file kbds))))
 
-
 ;;;; Keymaps, Layers and Transformations.
 (defun mugur--transform-key (key)
   "Transform a user-supplied KEY to the qmk equivalent.
@@ -568,6 +568,9 @@ that can be used to generate the qmk equivalent."
   orientation)
 
 (cl-defstruct mugur--keymap
+  keyboard
+  name
+  layout
   tapping-term
   combo-term
   rgblight-enable
@@ -592,15 +595,20 @@ containing ones and zeroes."
    :leds leds
    :orientation orientation))
 
-(cl-defun mugur--new-keymap (&key layers
-                                  (tapping-term nil) (combo-term nil)
-                                  (rgblight-enable nil) (rgblight-animations nil)
-                                  (rgb-matrix-enable nil)
-                                  (force-nkro t)
-                                  (combos nil) (macros nil) (tapdances nil)
-                                  (fns nil))
+(cl-defun mugur--new-keymap (&key
+                             layers
+                             (layout nil) (keyboard nil) (name nil)
+                             (tapping-term nil) (combo-term nil)
+                             (rgblight-enable nil) (rgblight-animations nil)
+                             (rgb-matrix-enable nil)
+                             (force-nkro t)
+                             (combos nil) (macros nil) (tapdances nil)
+                             (fns nil))
   "Create a new keymap with NAME, KEYBOARD type and LAYERS."
   (make-mugur--keymap
+   :keyboard keyboard
+   :name name
+   :layout layout
    :tapping-term tapping-term
    :combo-term combo-term
    :rgblight-enable rgblight-enable
@@ -624,16 +632,17 @@ containing ones and zeroes."
   "Remember the KEYMAP for later use."
   (setf mugur--keymap keymap))
 
+(defun mugur--leds-p (layer-elt)
+  (and (listp layer-elt) (= (length layer-elt) 3)))
+
 (defun mugur--leds (layer)
   "Extract the leds specification from LAYER.
 The leds specification can be given as a second or third argument
 in every layer.  If no leds specification exists, return nil."
   (if (> (length layer) 2)
-      (if (and (listp (cadr layer))
-               (= (length (cadr layer)) 3))
+      (if (mugur--leds-p (cadr layer))
           (cadr layer)
-        (if (and (listp (caddr layer))
-                 (= (length (caddr layer)) 3))
+        (if (mugur--leds-p (caddr layer))
             (caddr layer)
           nil))))
 
@@ -646,7 +655,8 @@ second or third argument."
           (cadr layer)
         (if (symbolp (caddr layer))
             (caddr layer)
-          nil))))
+          'horizontal))
+    'horizontal))
 
 (defun mugur--keys (layer)
   "Return the keys list for this LAYER."
@@ -665,20 +675,27 @@ second or third argument."
     keys))
 
 ;;;###autoload
-(cl-defun mugur-keymap (&key (tapping-term 180)
-                             (combo-term 100)
-                             (rgblight-enable nil)
-                             (rgblight-animations nil)
-                             (rgb-matrix-enable nil)
-                             (force-nkro t)
-                             (layers nil)
-                             (combos nil)
-                             (with-keys nil))
+(cl-defun mugur-keymap (&key
+                        (keyboard "ergodox_ez")
+                        (name "mugur")
+                        (layout 'mugur-ergodox-layout)
+                        (tapping-term 180)
+                        (combo-term 100)
+                        (rgblight-enable nil)
+                        (rgblight-animations nil)
+                        (rgb-matrix-enable nil)
+                        (force-nkro t)
+                        (layers nil)
+                        (combos nil)
+                        (with-keys nil))
   "Define a qmk keymap named NAME for keyboard KEYBOARD."
   ;; Prepare for any mugur-key specifying emacs functions.
   (mugur--fns-reset)
   (mugur--keymap-set
    (mugur--new-keymap
+    :keyboard keyboard
+    :name name
+    :layout layout
     :tapping-term tapping-term
     :combo-term combo-term
     :rgblight-enable rgblight-enable
@@ -878,13 +895,13 @@ This qmk function runs whenever there is a layer state change."
     (insert "};\n\n")
     (buffer-string)))
 
-(defconst mugur--layout-vertical
-  "
+(defconst mugur-ergodox-layout
+  '((vertical . "
 $1,  $2,  $3,  $4,  $5,  $6,  $7,
 $8,  $9,  $10, $11, $12, $13, $14,
 $15, $16, $17, $18, $19, $20,
 $21, $22, $23, $24, $25, $26, $27,
-$28  $29, $30, $31, $32,
+$28, $29, $30, $31, $32,
                          $33, $34,
                               $35,
                     $36, $37, $38,
@@ -892,14 +909,12 @@ $28  $29, $30, $31, $32,
 $39, $40, $41, $42, $43, $44, $45,
 $46, $47, $48, $49, $50, $51, $52,
      $53, $54, $55, $56, $57, $58,
-$59, $60, $61, $62, $63, $64  $65,
-$66, $67, $68, $69, $70
+$59, $60, $61, $62, $63, $64, $65,
+$66, $67, $68, $69, $70,
                          $71, $72,
                               $73,
                     $74, $75, $76")
-
-(defconst mugur--layout-horizontal
-  "
+  (horizontal . "
  $1,  $2,  $3,  $4,  $5,  $6,  $7,
  $15, $16, $17, $18, $19, $20, $21,
  $29, $30, $31, $32, $33, $34,
@@ -916,12 +931,18 @@ $66, $67, $68, $69, $70
            $60, $61, $62, $63, $64,
                           $67, $68,
                                $70,
-                     $74, $75, $76")
+                     $74, $75, $76")))
 
 (defun mugur--vertical-orientation-p (layer)
   "Does this LAYER have vertical orientation?"
   (equal (mugur--layer-orientation layer)
      'vertical))
+
+(defun mugur--layout-macro-name (keymap)
+  (let ((keyboard (mugur--keymap-keyboard keymap)))
+        (pcase keyboard
+            ("ergodox_ez" "LAYOUT_ergodox")
+            (_ "LAYOUT"))))
 
 (defun mugur--c-keymaps (keymap)
   "Generate the qmk keymaps matrix based on KEYMAP.
@@ -933,23 +954,24 @@ The keymaps matrix contains all the layers and keys."
       (lambda (item1 item2)
         (concat item1 ", \n\n" item2))
       (mapcar (lambda (layer)
-           (s-format (format "[$0] = LAYOUT_ergodox(\n%s)"
-                             (if (mugur--vertical-orientation-p layer)
-                                 (s-trim mugur--layout-vertical)
-                               (s-trim mugur--layout-horizontal)))
-                     'elt
-                     (cons (mugur--layer-name layer)
-                           (mugur--layer-keys layer))))
-         (mugur--keymap-layers keymap))))
+                (s-format (format "[$0] = %s(\n%s)"
+                                  (mugur--layout-macro-name keymap)
+                                  (s-trim
+                                   (cdr (assoc (mugur--layer-orientation layer)
+                                               (symbol-value (mugur--keymap-layout keymap))))))
+                          'elt
+                          (cons (mugur--layer-name layer)
+                                (mugur--layer-keys layer))))
+              (mugur--keymap-layers keymap))))
     (insert "\n};\n\n\n")
     (buffer-string)))
 
-(defun mugur--c-file-path (file)
+(defun mugur--c-file-path (keymap file)
   "Build the qmk C FILE path based on KEYMAP and KEYBOARD."
   (let ((mugur-path
          (concat (file-name-as-directory mugur-qmk-path)
-                 (file-name-as-directory "keyboards/ergodox_ez/keymaps")
-                 (file-name-as-directory "mugur"))))
+                 (file-name-as-directory (format "keyboards/%s/keymaps" (mugur--keymap-keyboard keymap)))
+                 (file-name-as-directory (mugur--keymap-name keymap)))))
     (unless (file-directory-p mugur-path)
       (make-directory mugur-path))
     (concat mugur-path file)))
@@ -960,7 +982,7 @@ The keymaps matrix contains all the layers and keys."
         (macros (mugur--keymap-macros keymap))
         (tapdances (mugur--keymap-tapdances keymap))
         (combos (mugur--keymap-combos keymap)))
-    (with-temp-file (mugur--c-file-path "keymap.c")
+    (with-temp-file (mugur--c-file-path keymap "keymap.c")
       (insert "#include QMK_KEYBOARD_H\n")
       (insert "#include \"version.h\"\n\n")
       (insert "#define ___ KC_TRNS\n")
@@ -978,11 +1000,12 @@ The keymaps matrix contains all the layers and keys."
       (insert (mugur--c-keymaps keymap))
       (insert (mugur--c-process-record-user macros))
       (insert (mugur--c-matrix-init-user))
-      (insert (mugur--c-layer-state-set-user keymap)))))
+      (when (seq-some #'mugur--layer-leds layers)
+        (insert (mugur--c-layer-state-set-user keymap))))))
 
 (defun mugur--generate-config-file (keymap)
   "Generate the qmk config.h file for KEYMAP."
-  (with-temp-file (mugur--c-file-path "config.h")
+  (with-temp-file (mugur--c-file-path keymap "config.h")
     (insert "#undef TAPPING_TERM\n")
     (insert (format "#define TAPPING_TERM %s\n" (mugur--keymap-tapping-term keymap)))
     (insert (format "#define COMBO_TERM %s\n" (mugur--keymap-combo-term keymap)))
@@ -996,7 +1019,7 @@ The keymaps matrix contains all the layers and keys."
 
 (defun mugur--generate-rules-file (keymap)
   "Generate the qmk rules.mk file for KEYMAP."
-  (with-temp-file (mugur--c-file-path "rules.mk")
+  (with-temp-file (mugur--c-file-path keymap "rules.mk")
     (when (mugur--keymap-tapdances keymap)
       (insert "TAP_DANCE_ENABLE = yes\n"))
     (when (mugur--keymap-combos keymap)
@@ -1038,7 +1061,7 @@ Opens a new `compilation-mode' buffer to view the results."
         (start-process "make" b "make"
                        "-C"
                        mugur-qmk-path
-                       "ergodox_ez:mugur"))
+                       (format "%s:%s" (mugur--keymap-keyboard keymap) (mugur--keymap-name keymap))))
       (switch-to-buffer "make mykeyboard"))))
 
 ;;;###autoload
@@ -1047,8 +1070,10 @@ Opens a new `compilation-mode' buffer to view the results."
   (interactive)
   (unless keymap
     (setf keymap (mugur--keymap)))
-  (let ((hex (format "%s/.build/ergodox_ez_mugur.hex"
-                     mugur-qmk-path)))
+  (let ((hex (format "%s/.build/%s_%s.hex"
+                     mugur-qmk-path
+                     (mugur--keymap-keyboard keymap)
+                     (mugur--keymap-name keymap))))
     (progn (start-process "flashing"
                           "flash mykeyboard"
                           "wally-cli"
