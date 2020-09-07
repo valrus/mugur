@@ -571,12 +571,8 @@ that can be used to generate the qmk equivalent."
   keyboard
   name
   layout
-  tapping-term
-  combo-term
-  rgblight-enable
-  rgblight-animations
-  rgb-matrix-enable
-  force-nkro
+  config
+  rules
   layers
   combos
   macros
@@ -598,10 +594,7 @@ containing ones and zeroes."
 (cl-defun mugur--new-keymap (&key
                              layers
                              (layout nil) (keyboard nil) (name nil)
-                             (tapping-term nil) (combo-term nil)
-                             (rgblight-enable nil) (rgblight-animations nil)
-                             (rgb-matrix-enable nil)
-                             (force-nkro t)
+                             (config nil) (rules nil)
                              (combos nil) (macros nil) (tapdances nil)
                              (fns nil))
   "Create a new keymap with NAME, KEYBOARD type and LAYERS."
@@ -609,12 +602,8 @@ containing ones and zeroes."
    :keyboard keyboard
    :name name
    :layout layout
-   :tapping-term tapping-term
-   :combo-term combo-term
-   :rgblight-enable rgblight-enable
-   :rgblight-animations rgblight-animations
-   :rgb-matrix-enable rgb-matrix-enable
-   :force-nkro force-nkro
+   :config config
+   :rules rules
    :layers layers
    :combos combos
    :macros macros
@@ -679,12 +668,13 @@ second or third argument."
                         (keyboard "ergodox_ez")
                         (name "mugur")
                         (layout 'mugur-ergodox-layout)
-                        (tapping-term 180)
-                        (combo-term 100)
-                        (rgblight-enable nil)
-                        (rgblight-animations nil)
-                        (rgb-matrix-enable nil)
-                        (force-nkro t)
+                        (config '((tapping-term 180)
+                                  (combo-term 100)
+                                  (rgblight-animations nil)
+                                  ))
+                        (rules '((rgblight-enable nil)
+                                 (rgb-matrix-enable nil)
+                                 (force-nkro t)))
                         (layers nil)
                         (combos nil)
                         (with-keys nil))
@@ -696,12 +686,8 @@ second or third argument."
     :keyboard keyboard
     :name name
     :layout layout
-    :tapping-term tapping-term
-    :combo-term combo-term
-    :rgblight-enable rgblight-enable
-    :rgblight-animations rgblight-animations
-    :rgb-matrix-enable rgb-matrix-enable
-    :force-nkro force-nkro
+    :config config
+    :rules rules
     :layers
     (let ((index 0))
       (mapcar (lambda (layer)
@@ -1007,12 +993,14 @@ The keymaps matrix contains all the layers and keys."
   "Generate the qmk config.h file for KEYMAP."
   (with-temp-file (mugur--c-file-path keymap "config.h")
     (insert "#undef TAPPING_TERM\n")
-    (insert (format "#define TAPPING_TERM %s\n" (mugur--keymap-tapping-term keymap)))
-    (insert (format "#define COMBO_TERM %s\n" (mugur--keymap-combo-term keymap)))
-    (when (mugur--keymap-force-nkro keymap)
-      (insert "#define FORCE_NKRO\n"))
-    (unless (mugur--keymap-rgblight-animations keymap)
-      (insert "#undef RGBLIGHT_ANIMATIONS\n"))
+    (dolist (config-entry (mugur--keymap-config keymap))
+      (let ((config-key (replace-regexp-in-string "-" "_" (upcase (symbol-name (car config-entry)))))
+            (config-val (cadr config-entry)))
+        (cond
+         ((stringp config-val) (insert (format "#define %s \"%s\"\n" config-key config-val)))
+         ((numberp config-val) (insert (format "#define %s %s\n" config-key (number-to-string config-val))))
+         (config-val (insert (format "#define %s\n" config-key)))
+         (t (insert (format "#undef %s\n" config-key))))))
     (awhen (mugur--keymap-combos keymap)
       (insert (format "#define COMBO_COUNT %s\n"
                       (length it))))))
@@ -1024,16 +1012,15 @@ The keymaps matrix contains all the layers and keys."
       (insert "TAP_DANCE_ENABLE = yes\n"))
     (when (mugur--keymap-combos keymap)
       (insert "COMBO_ENABLE = yes\n"))
-    (when (mugur--keymap-force-nkro keymap)
-      (insert "FORCE_NKRO = yes\n"))
-    (insert (format "RGBLIGHT_ENABLE = %s\n"
-                    (if (mugur--keymap-rgblight-enable keymap)
-                        "yes"
-                      "no")))
-    (insert (format "RGB_MATRIX_ENABLE = %s\n"
-                    (if (mugur--keymap-rgb-matrix-enable keymap)
-                        "yes"
-                      "no")))))
+
+    (dolist (config-entry (mugur--keymap-rules keymap))
+      (let ((config-key (replace-regexp-in-string "-" "_" (upcase (symbol-name (car config-entry)))))
+            (config-val (cadr config-entry)))
+        (cond
+         ((stringp config-val) (insert (format "%s = \"%s\"\n" config-key config-val)))
+         ((numberp config-val) (insert (format "%s = %s\n" config-key (number-to-string config-val))))
+         (config-val (insert (format "%s = yes\n" config-key)))
+         (t (insert (format "%s = no\n" config-key))))))))
 
 ;;;###autoload
 (defun mugur-generate (&optional keymap)
