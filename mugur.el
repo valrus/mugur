@@ -565,6 +565,7 @@ that can be used to generate the qmk equivalent."
   index
   keys
   leds
+  rgb
   orientation)
 
 (cl-defstruct mugur--keymap
@@ -579,7 +580,7 @@ that can be used to generate the qmk equivalent."
   tapdances
   fns)
 
-(cl-defun mugur--new-layer (name index keys &key (leds nil) (orientation 'horizontal))
+(cl-defun mugur--new-layer (name index keys &key (leds nil) (rgb nil) (orientation 'horizontal))
   "Create a new layer named NAME.
 A layer also has an INDEX a list of KEYS, and ORIENTATION and
 optional a LEDs specification which is a list of length 3
@@ -589,6 +590,7 @@ containing ones and zeroes."
    :index index
    :keys keys
    :leds leds
+   :rgb rgb
    :orientation orientation))
 
 (cl-defun mugur--new-keymap (&key
@@ -621,19 +623,36 @@ containing ones and zeroes."
   "Remember the KEYMAP for later use."
   (setf mugur--keymap keymap))
 
+(defun mugur--nil-or-t-p (arg)
+  "Return t if ARG is nil or t. Otherwise return nil."
+  (or (eq arg nil) (eq arg t)))
+
 (defun mugur--leds-p (layer-elt)
-  (and (listp layer-elt) (= (length layer-elt) 3)))
+  (and
+   (listp layer-elt)
+   (= (length layer-elt) 3)
+   (seq-every-p #'mugur--nil-or-t-p layer-elt)))
+
+(defun mugur--valid-rgb-p (arg)
+  (and
+   (numberp arg)
+   (>= 255 arg 0)))
+
+(defun mugur--layer-rgb-p (layer-elt)
+  (and
+   (listp layer-elt)
+   (= (length layer-elt) 3)
+   (seq-every-p #'mugur--valid-rgb-p layer-elt)))
 
 (defun mugur--leds (layer)
   "Extract the leds specification from LAYER.
-The leds specification can be given as a second or third argument
-in every layer.  If no leds specification exists, return nil."
-  (if (> (length layer) 2)
-      (if (mugur--leds-p (cadr layer))
-          (cadr layer)
-        (if (mugur--leds-p (caddr layer))
-            (caddr layer)
-          nil))))
+If no leds specification exists, return nil."
+  (seq-find #'mugur--leds-p layer))
+
+(defun mugur--rgb (layer)
+  "Extract the rgb specification from LAYER.
+If no rgb specification exists, return nil."
+  (seq-find #'mugur--layer-rgb-p layer))
 
 (defun mugur--orientation (layer)
   "Return the LAYER orientaton.
@@ -693,6 +712,7 @@ second or third argument."
       (mapcar (lambda (layer)
            (let ((name (car layer))
                  (leds (mugur--leds layer))
+                 (rgb (mugur--rgb layer))
                  (keys (mugur--keys layer))
                  (orientation (mugur--orientation layer)))
              (setf index (+ 1 index))
@@ -700,6 +720,7 @@ second or third argument."
                                (mugur--transform-keys
                                 (mugur--replace-custom-keys with-keys keys))
                                :leds leds
+                               :rgb rgb
                                :orientation orientation)))
          layers))
     
@@ -858,6 +879,40 @@ This qmk function runs just one time when the keyboard inits."
 
 ")
 
+(defun mugur--c-rgb-matrix-indicators-user (keymap)
+  "Generate the keymap.c layer_state_set_user function using KEYMAP.
+This qmk function runs whenever there is a layer state change."
+  (with-temp-buffer
+    (insert "extern bool g_suspend_state;\n")
+    (insert "const uint8_t PROGMEM ledmap[][3] = {\n")
+    (cl-dolist (layer (mugur--keymap-layers keymap))
+      (insert (format "\t[%s] = " (mugur--layer-name layer)))
+      (let ((rgb (aif (mugur--layer-rgb layer) it '(0 0 0))))
+        (insert (format "{%s},\n" (s-join "," (mapcar #'number-to-string rgb))))))
+    (insert "};\n\n")
+    (insert "void set_layer_color(int layer) {\n")
+    (insert "\tRGB rgb = {\n")
+    (insert "\t\t.r = pgm_read_byte(&ledmap[layer][0]),\n")
+    (insert "\t\t.g = pgm_read_byte(&ledmap[layer][1]),\n")
+    (insert "\t\t.b = pgm_read_byte(&ledmap[layer][2]),\n")
+    (insert "\t};\n")
+    (insert "\trgb_matrix_set_color_all(rgb.r, rgb.g, rgb.b);\n")
+    (insert "}\n\n")
+    (insert "void rgb_matrix_indicators_user(void) {\n")
+    (insert "\tif (g_suspend_state || keyboard_config.disable_layer_led) { return; }\n")
+    (insert "\tswitch (biton32(layer_state)) {\n")
+    (cl-dolist (layer (cdr (mugur--keymap-layers keymap)))
+      (insert (format "\tcase %s:\n" (mugur--layer-name layer)))
+      (insert (format "\t\tset_layer_color(%s);\n" (mugur--layer-name layer)))
+      (insert "\t\tbreak;\n"))
+    (insert "\t default:\n")
+    (insert "\t\tif (rgb_matrix_get_flags() == LED_FLAG_NONE)\n")
+    (insert "\t\t\trgb_matrix_set_color_all(0, 0, 0);\n")
+    (insert "\t\tbreak;\n")
+    (insert "\t}\n")
+    (insert "}\n\n")
+    (buffer-string)))
+
 (defun mugur--c-layer-state-set-user (keymap)
   "Generate the keymap.c layer_state_set_user function using KEYMAP.
 This qmk function runs whenever there is a layer state change."
@@ -873,7 +928,7 @@ This qmk function runs whenever there is a layer state change."
       (insert (format "\t\tcase %s:\n" (mugur--layer-name layer)))
       (awhen (mugur--layer-leds layer)
         (cl-dotimes (i (length it))
-          (when (= (nth i it) 1)
+          (when (nth i it)
             (insert (format "\t\t\tergodox_right_led_%s_on();\n" (+ i 1))))))
       (insert "\t\t\tbreak;\n"))
     (insert "\t}\n")
@@ -985,7 +1040,8 @@ The keymaps matrix contains all the layers and keys."
         (insert (mugur--c-combos-process-combo-event combos)))
       (insert (mugur--c-keymaps keymap))
       (insert (mugur--c-process-record-user macros))
-      (insert (mugur--c-matrix-init-user))
+      (when (seq-some #'mugur--layer-rgb layers)
+        (insert (mugur--c-rgb-matrix-indicators-user keymap)))
       (when (seq-some #'mugur--layer-leds layers)
         (insert (mugur--c-layer-state-set-user keymap))))))
 
